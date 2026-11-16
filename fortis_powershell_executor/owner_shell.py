@@ -11,6 +11,7 @@ secret grants remote code execution. Never run the process as Administrator.
 import argparse
 import base64
 import ctypes
+from contextlib import contextmanager
 import hmac
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -58,10 +59,18 @@ class ShellWorker:
                        'request_id TEXT PRIMARY KEY, command_sha256 TEXT NOT NULL, '
                        'state TEXT NOT NULL, result TEXT)')
 
+    @contextmanager
     def _db(self):
+        # sqlite3.Connection.__exit__ commits or rolls back, but does NOT
+        # close the file handle. Close deterministically: Windows refuses
+        # temporary DB cleanup / controlled migration with an open handle.
         db = sqlite3.connect(str(self.path), timeout=15)
-        db.execute('PRAGMA synchronous=FULL')
-        return db
+        try:
+            db.execute('PRAGMA synchronous=FULL')
+            with db:
+                yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _powershell(command):
