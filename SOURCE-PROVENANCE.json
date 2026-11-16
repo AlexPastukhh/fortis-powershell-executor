@@ -23,8 +23,8 @@
     "fortis_powershell_executor/__init__.py": "e682bd0aa6a32d28a4c9d127e6bd48c1b14cd2405f589d5f452d38ef1988256b",
     "fortis_powershell_executor/owner_shell.py": "510652ef62679892bee85adeb5895a3b239dfa5ed2bbbf2836e4436033a4ec33",
     "release/targets.yaml": "5841a7240fa4aeda1374e7261880b8c7f979fe78440bc2818d67f0204a7d17cc",
-    "tests/test_owner_shell.py": "1b6f648d01508f71f127f3af3d7b8709345341c6a68fa676667cc5554937ec2e",
-    "tests/test_receipt_compatibility.py": "4697dbd36877ba727dc908f0a9b59159bba67cadeb3941e490cf0aeaa3da29f4"
+    "tests/test_owner_shell.py": "721652932d5f091f3f4608a9c06c72d87bb3d4391dcd991a17d8164711433bf3",
+    "tests/test_receipt_compatibility.py": "5fcb47951875bceeca44e51c6cadf6cc7445e1e91e5631eea9408cb344396f70"
   },
   "transformations": [
     "worker bytes unchanged",
@@ -43,6 +43,20 @@
       "beforeSha256": "4e6182d4982cf0d2d32aa8bfb94969644c1dd98a5885ea6a8107e77cf0d39adb",
       "afterSha256": "c59449061a742003c0218097e02377133f532f45d924d618403977e4b0cf920a",
       "reason": "Pin checkout to the exact PR HEAD and disable credential persistence"
+    }
+  ],
+  "postImportAdjustments": [
+    {
+      "path": "tests/test_owner_shell.py",
+      "beforeSha256": "1b6f648d01508f71f127f3af3d7b8709345341c6a68fa676667cc5554937ec2e",
+      "afterSha256": "721652932d5f091f3f4608a9c06c72d87bb3d4391dcd991a17d8164711433bf3",
+      "reason": "Collect temporary SQLite connection cycles before Windows fixture directory cleanup; runner bytes remain unchanged"
+    },
+    {
+      "path": "tests/test_receipt_compatibility.py",
+      "beforeSha256": "4697dbd36877ba727dc908f0a9b59159bba67cadeb3941e490cf0aeaa3da29f4",
+      "afterSha256": "5fcb47951875bceeca44e51c6cadf6cc7445e1e91e5631eea9408cb344396f70",
+      "reason": "Collect temporary SQLite connection cycles before Windows fixture directory cleanup; runner bytes remain unchanged"
     }
   ]
 }

@@ -1,6 +1,7 @@
 """Offline Windows owner shell worker/HTTP security tests; no PowerShell run."""
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
+import gc
 import json
 from pathlib import Path
 import tempfile
@@ -17,6 +18,7 @@ class ShellWorkerTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        self.addCleanup(gc.collect)
         self.calls=[]
         def runner(command):
             self.calls.append(command)
@@ -74,6 +76,7 @@ class ShellWorkerTests(unittest.TestCase):
 class ShellHttpTests(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
+        self.addCleanup(gc.collect)
         self.calls=[]
         self.worker=ShellWorker(Path(tmp.name)/'receipt.sqlite',runner=lambda s:self.record(s))
         self.server=ThreadingHTTPServer(('127.0.0.1',0),ShellHandler)

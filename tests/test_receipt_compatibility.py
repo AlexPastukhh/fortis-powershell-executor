@@ -1,5 +1,6 @@
 """Legacy ledger fixtures: no PowerShell or installed data is used."""
 import hashlib
+import gc
 import json
 from pathlib import Path
 import sqlite3
@@ -16,6 +17,7 @@ class LegacyReceipts(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        self.addCleanup(gc.collect)
         self.db = Path(self.tmp.name) / "existing.sqlite"
         self.calls = []
         with sqlite3.connect(self.db) as conn:
