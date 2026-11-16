@@ -1,0 +1,27 @@
+schemaVersion: 1
+repository: fortis-powershell-executor
+buildUnits: []
+targets:
+  - id: windows-powershell-executor
+    inputs:
+      - "*.ps1"
+      - fortis_powershell_executor/**
+    deployment:
+      kind: windows-source
+      procedure: docs/MIGRATION.md
+      environments: [windows-owner]
+    verification:
+      - source-ci
+      - windows-powershell-parse
+      - owner-exact-source-cutover
+      - existing-receipt-readback
+noDeploymentPaths:
+  - README.md
+  - AGENTS.md
+  - docs/**
+  - tests/**
+  - .github/**
+  - .gitignore
+  - .gitattributes
+  - release/**
+  - SOURCE-PROVENANCE.json
