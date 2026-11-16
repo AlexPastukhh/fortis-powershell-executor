@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "status": "SOURCE_CANDIDATE_NOT_INSTALLED",
+  "sourceRepository": "AlexPastukhh/docke-windows-mirror",
+  "sourceCommit": "b25bf88d330ff8b8921469f5bf0bedbc353a7861",
+  "targetRepository": "fortis-powershell-executor",
+  "inputs": {
+    "mirror_api/owner_shell.py": "510652ef62679892bee85adeb5895a3b239dfa5ed2bbbf2836e4436033a4ec33",
+    "Start-OwnerPowerShellExecutor.ps1": "30f00918b8621fb26344a568d4bd894aaa42ae69c082d4f26831726d4447aac8",
+    "test_mirror_owner_shell.py": "778d987d79cdc88aa93bded09710b01b7c64b522dd0b397a720dfb78409c0c45",
+    ".github/workflows/release-impact.yml": "e141908e8aeadf41088e7998842f72dea52ea4332346a5e3bd084e7de7d65218"
+  },
+  "outputs": {
+    ".gitattributes": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
+    ".github/workflows/release-impact.yml": "e141908e8aeadf41088e7998842f72dea52ea4332346a5e3bd084e7de7d65218",
+    ".github/workflows/source-ci.yml": "c59449061a742003c0218097e02377133f532f45d924d618403977e4b0cf920a",
+    ".gitignore": "01355c6cb4c0449bcd1efe02756c68071981854ba97d8675ce197d806ad93611",
+    "AGENTS.md": "20f78428f7d435d072d6af9cef4ed52d022df23c0bd8adad5154f677546ac711",
+    "README.md": "0c231008e319e63e1f285ef1a58de4a14a5504488dd55ae6e5fde2f2a44d2a1b",
+    "Start-OwnerPowerShellExecutor.ps1": "eced3bb147bf57476fa33a447fe9fa389f97a0cd58c70da07bf809a1216d11ca",
+    "docs/API.md": "e6956e5847c9ffe485dca47e49498c7939b950fd0535daeaa33141d80af851b1",
+    "docs/MIGRATION.md": "86573c7ce445bf8505d9d4b2589b400346e3bef66eebef6d8863228b195941b0",
+    "fortis_powershell_executor/__init__.py": "e682bd0aa6a32d28a4c9d127e6bd48c1b14cd2405f589d5f452d38ef1988256b",
+    "fortis_powershell_executor/owner_shell.py": "510652ef62679892bee85adeb5895a3b239dfa5ed2bbbf2836e4436033a4ec33",
+    "release/targets.yaml": "5841a7240fa4aeda1374e7261880b8c7f979fe78440bc2818d67f0204a7d17cc",
+    "tests/test_owner_shell.py": "721652932d5f091f3f4608a9c06c72d87bb3d4391dcd991a17d8164711433bf3",
+    "tests/test_receipt_compatibility.py": "5fcb47951875bceeca44e51c6cadf6cc7445e1e91e5631eea9408cb344396f70"
+  },
+  "transformations": [
+    "worker bytes unchanged",
+    "launcher module relocated",
+    "test imports/mock target relocated",
+    "standalone packaging added"
+  ],
+  "licenseFiles": [],
+  "hostChanged": false,
+  "machineExecutionAdded": false,
+  "sourceArchiveSha256": "c1de976bd229d5b1c65d1d50e705c0f26769da34a2c2b2eda8b63b09ab1af1b1",
+  "targetBaseCommit": "1044d6c47c8445711adcad809e5670e62641e4e9",
+  "importAdjustments": [
+    {
+      "path": ".github/workflows/source-ci.yml",
+      "beforeSha256": "4e6182d4982cf0d2d32aa8bfb94969644c1dd98a5885ea6a8107e77cf0d39adb",
+      "afterSha256": "c59449061a742003c0218097e02377133f532f45d924d618403977e4b0cf920a",
+      "reason": "Pin checkout to the exact PR HEAD and disable credential persistence"
+    }
+  ],
+  "postImportAdjustments": [
+    {
+      "path": "tests/test_owner_shell.py",
+      "beforeSha256": "1b6f648d01508f71f127f3af3d7b8709345341c6a68fa676667cc5554937ec2e",
+      "afterSha256": "721652932d5f091f3f4608a9c06c72d87bb3d4391dcd991a17d8164711433bf3",
+      "reason": "Collect temporary SQLite connection cycles before Windows fixture directory cleanup; runner bytes remain unchanged"
+    },
+    {
+      "path": "tests/test_receipt_compatibility.py",
+      "beforeSha256": "4697dbd36877ba727dc908f0a9b59159bba67cadeb3941e490cf0aeaa3da29f4",
+      "afterSha256": "5fcb47951875bceeca44e51c6cadf6cc7445e1e91e5631eea9408cb344396f70",
+      "reason": "Collect temporary SQLite connection cycles before Windows fixture directory cleanup; runner bytes remain unchanged"
+    }
+  ]
+}
