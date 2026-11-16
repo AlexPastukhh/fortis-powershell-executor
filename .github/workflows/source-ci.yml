@@ -34,3 +34,8 @@ jobs:
             [ref]$tokens, [ref]$errors)
           if (@($errors).Count -ne 0) { throw 'EXECUTOR_POWERSHELL_PARSE_FAILED' }
           Write-Host 'EXECUTOR_POWERSHELL_PARSE_PASS'
+      - name: Windows machine secret containment and ACL negatives
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          & .\tests\Test-MachineSecretPaths.ps1

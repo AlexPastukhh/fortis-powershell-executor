@@ -45,40 +45,15 @@ if ($machineSelected.Count -eq 4) {
         $MachineTarget -cnotmatch '^[a-z][a-z0-9-]{0,63}$') {
         throw 'MACHINE_SHELL_ACTOR_TARGET_INVALID'
     }
-    $expectedRoot = [IO.Path]::GetFullPath(
-        (Join-Path $env:LOCALAPPDATA 'Fortis\OwnerShell')
-    ).TrimEnd('')
-    $secretPaths = @($MachineBearerFile,$MachineProofFile)
-    $normalized = @($SecretFile) + $secretPaths
-    $fullPaths = @($normalized | ForEach-Object {
-        [IO.Path]::GetFullPath($_)
-    })
-    if (@($fullPaths | Sort-Object -Unique).Count -ne 3) {
-        throw 'MACHINE_SHELL_SECRET_PATH_REUSE_DENIED'
+    $source = Split-Path -Parent $MyInvocation.MyCommand.Path
+    . (Join-Path $source 'scripts\Assert-MachineSecretPaths.ps1')
+    $machinePathArgs = @{
+        OwnerShellRoot = (Join-Path $env:LOCALAPPDATA 'Fortis\OwnerShell')
+        OwnerSecret = $SecretFile
+        MachineBearer = $MachineBearerFile
+        MachineProof = $MachineProofFile
     }
-    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $allowedSids = @($currentSid,'S-1-5-18','S-1-5-32-544')
-    foreach ($file in $secretPaths) {
-        $path = [IO.Path]::GetFullPath($file)
-        if (-not $path.StartsWith($expectedRoot + '',
-                [StringComparison]::OrdinalIgnoreCase)) {
-            throw 'MACHINE_SHELL_SECRET_OUTSIDE_PROTECTED_ROOT'
-        }
-        $item = Get-Item -LiteralPath $path -ErrorAction Stop
-        if ($item.PSIsContainer -or
-            ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-            throw 'MACHINE_SHELL_SECRET_PATH_INVALID'
-        }
-        $acl = Get-Acl -LiteralPath $path -ErrorAction Stop
-        foreach ($rule in $acl.Access) {
-            if ($rule.AccessControlType -ne 'Allow') { continue }
-            $sid = $rule.IdentityReference.Translate(
-                [Security.Principal.SecurityIdentifier]).Value
-            if ($sid -notin $allowedSids) {
-                throw 'MACHINE_SHELL_SECRET_ACL_TOO_BROAD'
-            }
-        }
-    }
+    Assert-FortisMachineSecretFiles @machinePathArgs
     $machineArgs = @('--machine-bearer-file',$MachineBearerFile,
         '--machine-proof-file',$MachineProofFile,
         '--machine-actor',$MachineActor,'--machine-target',$MachineTarget)

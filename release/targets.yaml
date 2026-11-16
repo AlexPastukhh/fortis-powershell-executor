@@ -5,6 +5,7 @@ targets:
   - id: windows-powershell-executor
     inputs:
       - "*.ps1"
+      - scripts/Assert-MachineSecretPaths.ps1
       - fortis_powershell_executor/**
     deployment:
       kind: windows-source

@@ -19,6 +19,6 @@ All V1 machine commands require ASK, including diagnostics. There is no command 
 
 The original Windows TLS files, existing protected config and **same current SQLite receipt DB** are retained. New authenticated machine execution only adds a shell_machine_bindings side table in that same DB; binding and DISPATCHED receipt reservation are one SQLite transaction. Historical owner-only receipts stay readable through owner route. An older UUID cannot be appropriated by machine. No second listener, no empty DB, no restore of an older receipt snapshot, no replay after timeout or lost ACK. Existing DISPATCHED/UNCERTAIN continues to block fresh effects.
 
-The new machine files must be under protected %LOCALAPPDATA%\Fortis\OwnerShell, with owner-reviewed restrictive NTFS ACLs. Non-admin execution remains mandatory. No machine credential, private key, or receipt is checked into Git.
+The new machine files must be **direct children** of protected %LOCALAPPDATA%\Fortis\OwnerShell (not a nested directory or a similarly prefixed sibling), with owner-reviewed restrictive, non-inherited NTFS ACLs on the directory and both files. Non-admin execution remains mandatory. No machine credential, private key, or receipt is checked into Git.
 
 **STOP before production:** distinct protected credentials, cryptographic/security review, owner-supplied Script Center enablement, Windows source update, Gateway owner-controlled release, mTLS negative tests, strong WebAuthn/Reject tests, same-DB migration/restart tests and rollback. Source CI does not imply Windows installation.
