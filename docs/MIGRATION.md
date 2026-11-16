@@ -28,5 +28,5 @@ snapshot that forgets newly reserved UUIDs or results. Ambiguity requires
 reviewed recovery, not replay or manual ledger editing.
 
 A source move with unchanged API/config does not need a Gateway image rebuild.
-Machine ASK and owner-editable restrictions remain separate subsequent stages.
+ASK-only machine execution is a separately reviewed, opt-in source stage (see docs/MACHINE-ASK-V1.md); owner-editable restrictions and selective ALLOW belong to V2+.
 See the authoritative plan in fortis-approvals for owner release/acceptance.

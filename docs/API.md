@@ -1,6 +1,6 @@
-# Owner-only Executor baseline API
+# Windows Executor — owner-only baseline and optional machine ASK source
 
-This source move preserves the existing protocol. It does not add a machine API.
+The installed owner-only protocol remains unchanged. The separate ASK-only machine API is SOURCE-ONLY, disabled by default. See docs/MACHINE-ASK-V1.md.
 
 - Owner-managed Windows bind: 127.0.0.1:10443; Gateway uses
   https://host.docker.internal:10443 with the existing server identity.

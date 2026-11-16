@@ -11,6 +11,7 @@ secret grants remote code execution. Never run the process as Administrator.
 import argparse
 import base64
 import ctypes
+from contextlib import contextmanager
 import hmac
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,6 +25,8 @@ import ssl
 import subprocess
 import threading
 from datetime import datetime, timezone
+
+from .machine_proof import MachineProofDenied, verify as verify_machine_proof
 
 UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z')
 MAX_COMMAND_BYTES = 8192
@@ -56,10 +59,18 @@ class ShellWorker:
                        'request_id TEXT PRIMARY KEY, command_sha256 TEXT NOT NULL, '
                        'state TEXT NOT NULL, result TEXT)')
 
+    @contextmanager
     def _db(self):
+        # sqlite3.Connection.__exit__ commits or rolls back, but does NOT
+        # close the file handle. Close deterministically: Windows refuses
+        # temporary DB cleanup / controlled migration with an open handle.
         db = sqlite3.connect(str(self.path), timeout=15)
-        db.execute('PRAGMA synchronous=FULL')
-        return db
+        try:
+            db.execute('PRAGMA synchronous=FULL')
+            with db:
+                yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _powershell(command):
@@ -132,16 +143,67 @@ class ShellWorker:
             return {'requestId': request_id, 'state': 'NOT_FOUND'}
         return json.loads(row[1]) if row[1] else {'requestId': request_id, 'state': row[0]}
 
-    def run(self, payload):
+    def machine_status(self, request_id, *, actor, target):
+        # Machine GET is scoped to machine-originated rows only. The legacy
+        # owner receipt DB is shared, but owner-only UUIDs must NOT leak
+        # through machine credentials.
+        if type(request_id) is not str or not UUID.fullmatch(request_id):
+            raise ShellDenied('REQUEST_ID_INVALID')
+        with self._db() as db:
+            installed = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='shell_machine_bindings'"
+            ).fetchone()
+            if installed is None:
+                return {'requestId': request_id, 'state': 'NOT_FOUND'}
+            found = db.execute(
+                'SELECT 1 FROM shell_machine_bindings WHERE request_id=? AND actor=? AND target=?',
+                (request_id, actor, target)).fetchone()
+            if found is None:
+                return {'requestId': request_id, 'state': 'NOT_FOUND'}
+            row = db.execute(
+                'SELECT state,result FROM shell_receipts WHERE request_id=?',
+                (request_id,)).fetchone()
+        if row is None:
+            return {'requestId': request_id, 'state': 'NOT_FOUND'}
+        return json.loads(row[1]) if row[1] else {
+            'requestId': request_id, 'state': row[0]}
+
+    def run(self, payload, *, machine_claims=None):
+        # machine_claims may only come from the verified machine HTTP route.
+        # Owner-only callers continue using the unchanged two-field contract.
         checked = exact_request(payload)
         request_id, command = checked['requestId'], checked['command']
         sha = hashlib.sha256(command.encode('utf-8')).hexdigest()
+        binding = None
+        if machine_claims is not None:
+            if (type(machine_claims) is not dict or
+                    machine_claims.get('requestId') != request_id or
+                    machine_claims.get('commandSha256') != sha):
+                raise ShellDenied('MACHINE_RECEIPT_BINDING_DENIED')
+            binding = hashlib.sha256(json.dumps({
+                'requestId': request_id, 'commandSha256': sha,
+                'actor': machine_claims['actor'], 'target': machine_claims['target'],
+                'coreFingerprint': machine_claims['coreFingerprint']},
+                sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
         with self.lock:
             with self._db() as db:
                 db.execute('BEGIN IMMEDIATE')
+                if binding is not None:
+                    # Same CURRENT receipt DB. One additive table for machine
+                    # binding; creation and reservation share a transaction.
+                    db.execute('CREATE TABLE IF NOT EXISTS shell_machine_bindings ('
+                               'request_id TEXT PRIMARY KEY, actor TEXT NOT NULL, '
+                               'target TEXT NOT NULL, core_fingerprint TEXT NOT NULL, '
+                               'binding_sha256 TEXT NOT NULL)')
                 prior = db.execute('SELECT command_sha256,state,result FROM shell_receipts WHERE request_id=?',
                                    (request_id,)).fetchone()
                 if prior is not None:
+                    if binding is not None:
+                        found = db.execute(
+                            'SELECT binding_sha256 FROM shell_machine_bindings WHERE request_id=?',
+                            (request_id,)).fetchone()
+                        if found is None or not hmac.compare_digest(found[0], binding):
+                            raise ShellDenied('MACHINE_RECEIPT_BINDING_DENIED')
                     if prior[0] != sha:
                         raise ShellDenied('REQUEST_ID_CONFLICT')
                     return json.loads(prior[2]) if prior[2] else {'requestId':request_id,'state':prior[1]}
@@ -153,6 +215,11 @@ class ShellWorker:
                     raise ShellDenied('SHELL_OPERATION_UNRESOLVED')
                 db.execute('INSERT INTO shell_receipts VALUES (?,?,?,NULL)',
                            (request_id, sha, 'DISPATCHED'))
+                if binding is not None:
+                    db.execute('INSERT INTO shell_machine_bindings VALUES (?,?,?,?,?)',
+                               (request_id, machine_claims['actor'],
+                                machine_claims['target'], machine_claims['coreFingerprint'],
+                                binding))
             try:
                 result = self.runner(command)
                 if (type(result) is not dict or type(result.get('exitCode')) is not int or
@@ -193,6 +260,59 @@ class ShellHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def machine_authorized(self):
+        if (not getattr(self.server, 'machine_enabled', False) or
+                self.headers.get('Host') != self.server.expected_host):
+            return False
+        token = self.headers.get('Authorization', '')
+        return hmac.compare_digest(token, 'Bearer ' + self.server.machine_bearer)
+
+    def machine_post(self):
+        if not self.machine_authorized():
+            self.reply(HTTPStatus.UNAUTHORIZED, {'error': 'MACHINE_SHELL_AUTH_REQUIRED'})
+            return
+        if (self.headers.get('Content-Type') != 'application/json' or
+                self.headers.get('Transfer-Encoding')):
+            self.reply(HTTPStatus.BAD_REQUEST, {'error': 'MACHINE_SHELL_JSON_REQUIRED'})
+            return
+        try:
+            n = int(self.headers.get('Content-Length', '0'))
+            if not 0 < n <= 16000:
+                raise ValueError()
+            body = self.rfile.read(n)
+            if len(body) != n:
+                raise ValueError()
+            def unique(pairs):
+                value = {}
+                for k, v in pairs:
+                    if k in value:
+                        raise ValueError()
+                    value[k] = v
+                return value
+            obj = json.loads(body, object_pairs_hook=unique)
+            if type(obj) is not dict or set(obj) != {'requestId', 'command', 'proof'}:
+                raise ValueError()
+            checked = exact_request({'requestId': obj['requestId'], 'command': obj['command']})
+            if checked['requestId'] != self.headers.get('Idempotency-Key'):
+                raise ValueError()
+        except (ValueError, TypeError, UnicodeError, KeyError):
+            self.reply(HTTPStatus.BAD_REQUEST, {'error': 'MACHINE_SHELL_REQUEST_INVALID'})
+            return
+        digest = hashlib.sha256(checked['command'].encode('utf-8')).hexdigest()
+        try:
+            claims = verify_machine_proof(
+                obj['proof'], self.server.machine_proof_key,
+                actor=self.server.machine_actor, target=self.server.machine_target,
+                request_id=checked['requestId'], command_sha256=digest)
+        except MachineProofDenied:
+            self.reply(HTTPStatus.FORBIDDEN, {'error': 'MACHINE_SHELL_PROOF_DENIED'})
+            return
+        try:
+            self.reply(HTTPStatus.OK,
+                       self.server.worker.run(checked, machine_claims=claims))
+        except ShellDenied as exc:
+            self.reply(HTTPStatus.CONFLICT, {'error': str(exc)})
+
     def authorized(self):
         if self.headers.get('Host') != self.server.expected_host:
             return False
@@ -200,6 +320,20 @@ class ShellHandler(BaseHTTPRequestHandler):
         return hmac.compare_digest(actual, 'Bearer ' + self.server.secret)
 
     def do_GET(self):
+        machine_match = re.fullmatch(r'/machine-shell/v1/results/([0-9a-f-]{36})',
+                                     self.path)
+        if machine_match:
+            if not self.machine_authorized():
+                self.reply(HTTPStatus.UNAUTHORIZED, {'error': 'MACHINE_SHELL_AUTH_REQUIRED'})
+                return
+            try:
+                result = self.server.worker.machine_status(
+                    machine_match.group(1),
+                    actor=self.server.machine_actor, target=self.server.machine_target)
+                self.reply(HTTPStatus.OK, result)
+            except ShellDenied as exc:
+                self.reply(HTTPStatus.BAD_REQUEST, {'error': str(exc)})
+            return
         if not self.authorized():
             self.reply(HTTPStatus.UNAUTHORIZED, {'error': 'OWNER_SHELL_AUTH_REQUIRED'})
             return
@@ -217,6 +351,8 @@ class ShellHandler(BaseHTTPRequestHandler):
         self.reply(HTTPStatus.NOT_FOUND, {'error': 'ROUTE_NOT_FOUND'})
 
     def do_POST(self):
+        if self.path == '/machine-shell/v1/execute':
+            return self.machine_post()
         if not self.authorized():
             self.reply(HTTPStatus.UNAUTHORIZED, {'error': 'OWNER_SHELL_AUTH_REQUIRED'})
             return
@@ -257,7 +393,9 @@ class ShellHandler(BaseHTTPRequestHandler):
     do_PATCH = do_DELETE = do_PUT
 
 
-def start_owner_shell(bind, port, cert, key, client_ca, secret_file, receipt_db):
+def start_owner_shell(bind, port, cert, key, client_ca, secret_file, receipt_db,
+                      *, machine_bearer_file=None, machine_proof_file=None,
+                      machine_actor=None, machine_target=None):
     if os.name != 'nt':
         raise ShellDenied('WINDOWS_REQUIRED')
     if ctypes.windll.shell32.IsUserAnAdmin():
@@ -268,8 +406,42 @@ def start_owner_shell(bind, port, cert, key, client_ca, secret_file, receipt_db)
     if (not 32 <= len(secret) <= 256 or
             any(ord(c) < 33 or ord(c) > 126 for c in secret)):
         raise ShellDenied('OWNER_SHELL_SECRET_INVALID')
+    supplied = (machine_bearer_file, machine_proof_file, machine_actor, machine_target)
+    if any(x is not None for x in supplied) and not all(supplied):
+        raise ShellDenied('MACHINE_SHELL_CONFIG_INCOMPLETE')
+    if all(supplied):
+        from .machine_proof import _ID
+        if (_ID.fullmatch(machine_actor) is None or
+                _ID.fullmatch(machine_target) is None or
+                machine_bearer_file == secret_file or
+                machine_bearer_file == machine_proof_file or
+                machine_proof_file == secret_file):
+            raise ShellDenied('MACHINE_SHELL_CONFIG_INVALID')
+        protected = Path(os.environ['LOCALAPPDATA']) / 'Fortis' / 'OwnerShell'
+        parent = protected.resolve(strict=True)
+        files = [Path(machine_bearer_file), Path(machine_proof_file)]
+        resolved = [file.resolve(strict=True) for file in files]
+        for file, real in zip(files, resolved):
+            if file.is_symlink() or parent not in real.parents:
+                raise ShellDenied('MACHINE_SHELL_PROTECTED_FILE_REQUIRED')
+        if len(set(resolved + [Path(secret_file).resolve(strict=True)])) != 3:
+            raise ShellDenied('MACHINE_SHELL_CREDENTIAL_REUSE_DENIED')
+        machine_bearer = files[0].read_text(encoding='ascii').strip()
+        machine_key = Path(machine_proof_file).read_bytes()
+        if (not 32 <= len(machine_bearer) <= 256 or
+                any(ord(c) < 33 or ord(c) > 126 for c in machine_bearer) or
+                not 32 <= len(machine_key) <= 4096 or
+                hmac.compare_digest(machine_bearer, secret) or
+                machine_key == machine_bearer.encode('ascii')):
+            raise ShellDenied('MACHINE_SHELL_CONFIG_INVALID')
     listener = ThreadingHTTPServer((bind, port), ShellHandler)
     listener.daemon_threads = True
+    listener.machine_enabled = bool(all(supplied))
+    if listener.machine_enabled:
+        listener.machine_bearer = machine_bearer
+        listener.machine_proof_key = machine_key
+        listener.machine_actor = machine_actor
+        listener.machine_target = machine_target
     listener.worker = ShellWorker(receipt_db)
     listener.expected_host = 'host.docker.internal:' + str(port)
     listener.secret = secret
@@ -286,12 +458,22 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Opt-in dedicated Windows owner PowerShell executor')
     for name in ('bind', 'port', 'cert', 'key', 'client-ca', 'secret-file', 'receipt-db'):
         parser.add_argument('--' + name, required=True)
+    for name in ('machine-bearer-file', 'machine-proof-file', 'machine-actor',
+                 'machine-target'):
+        parser.add_argument('--' + name, required=False, default=None)
     args = parser.parse_args(argv)
     if not 1024 <= int(args.port) <= 65535:
         parser.error('PORT_INVALID')
-    with start_owner_shell(args.bind, int(args.port), args.cert, args.key, args.client_ca,
-                           args.secret_file, args.receipt_db) as server:
-        print('OWNER_SHELL_MTLS_READY (no browser or machine API; do not run elevated)', flush=True)
+    with start_owner_shell(
+            args.bind, int(args.port), args.cert, args.key, args.client_ca,
+            args.secret_file, args.receipt_db,
+            machine_bearer_file=args.machine_bearer_file,
+            machine_proof_file=args.machine_proof_file,
+            machine_actor=args.machine_actor, machine_target=args.machine_target) as server:
+        if server.machine_enabled:
+            print('OWNER_SHELL_MTLS_READY (machine ASK proof verifier enabled; non-admin)', flush=True)
+        else:
+            print('OWNER_SHELL_MTLS_READY (no browser or machine API; do not run elevated)', flush=True)
         server.serve_forever()
 
 
