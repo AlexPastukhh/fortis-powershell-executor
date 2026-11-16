@@ -7,7 +7,7 @@ Source extraction is not installation or live acceptance.
 
 The baseline accepts only the trusted Owner Portal transport using mTLS and
 an independent bearer. It is one-shot, noninteractive and non-admin.
-It does not yet implement Repo machine ASK, an approval proof or command rules.
+The installed owner-only mode remains unchanged. A separate ASK-only machine route and proof verifier are SOURCE-ONLY and disabled by default. Owner-editable command rules and automatic ALLOW are future work. See docs/MACHINE-ASK-V1.md.
 Those are the next stages in the [Gateway plan](https://github.com/AlexPastukhh/fortis-approvals/blob/main/docs/BACKLOG-IMPROVEMENTS.md#powershell-plan).
 
 The runner is byte-identical to its recorded original Git blob.
