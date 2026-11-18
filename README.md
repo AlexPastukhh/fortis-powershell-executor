@@ -7,8 +7,8 @@ Source extraction is not installation or live acceptance.
 
 The baseline accepts only the trusted Owner Portal transport using mTLS and
 an independent bearer. It is one-shot, noninteractive and non-admin.
-The installed owner-only mode remains unchanged. A separate ASK-only machine route and proof verifier are SOURCE-ONLY and disabled by default. Owner-editable command rules and automatic ALLOW are future work. See docs/MACHINE-ASK-V1.md.
-Those are the next stages in the [Gateway plan](https://github.com/AlexPastukhh/fortis-approvals/blob/main/docs/BACKLOG-IMPROVEMENTS.md#powershell-plan).
+The owner-only interface remains separate. A machine route and proof verifier are **disabled by default** unless separately activated through protected ASK_ONLY configuration and an owner-controlled single-process launch. On 2026-11-18 the owner reported live Machine ASK activation and one positive Get-Date execution, independently read through Gateway and Windows SQLite. This dated acceptance does not authorize a future restart or imply completion of live fault-injection negatives. Owner-editable restrictions and automatic ALLOW are future work. See [Machine ASK V1](docs/MACHINE-ASK-V1.md) and [Executor Use Cases](docs/use-cases/README.md).
+Remaining negative acceptance and future policy work are tracked in the [Gateway plan](https://github.com/AlexPastukhh/fortis-approvals/blob/main/docs/BACKLOG-IMPROVEMENTS.md#powershell-plan).
 
 The runner is byte-identical to its recorded original Git blob.
 Only package/test imports and the launcher module name are relocated.
