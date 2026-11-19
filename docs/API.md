@@ -1,6 +1,11 @@
-# Windows Executor — owner-only baseline and optional machine ASK source
+# Windows Executor — owner-only API and Machine ASK V1
 
-The installed owner-only protocol remains unchanged. The separate ASK-only machine API is SOURCE-ONLY, disabled by default. See docs/MACHINE-ASK-V1.md.
+The owner-only protocol remains unchanged. The separate machine API is
+**active in live ASK-only V1** (2026-11-18 Get-Date/Reject E2E); the source
+launcher still requires an explicit protected opt-in on a **new install**.
+See [Machine ASK V1](MACHINE-ASK-V1.md) for the existing machine wire
+contract, not a second copy of it. Dynamic per-command ASK/ALLOW is
+**planned only** in [Executor backlog](BACKLOG-IMPROVEMENTS.md#executor-dynamic-ask).
 
 - Owner-managed Windows bind: 127.0.0.1:10443; Gateway uses
   https://host.docker.internal:10443 with the existing server identity.
